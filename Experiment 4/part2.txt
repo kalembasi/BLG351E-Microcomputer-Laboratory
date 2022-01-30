@@ -1,0 +1,151 @@
+;-------------------------------------------------------------------------------
+; MSP430 Assembler Code Template for use with TI Code Composer Studio
+;
+;
+;-------------------------------------------------------------------------------
+            .cdecls C,LIST,"msp430.h"       ; Include device header file
+            
+;-------------------------------------------------------------------------------
+            .def    RESET                   ; Export program entry-point to
+                                            ; make it known to linker.
+;-------------------------------------------------------------------------------
+            .text                           ; Assemble into program memory.
+            .retain                         ; Override ELF conditional linking
+                                            ; and retain current section.
+            .retainrefs                     ; And retain any sections that have
+                                            ; references to current section.
+
+;-------------------------------------------------------------------------------
+RESET       mov.w   #__STACK_END,SP         ; Initialize stackpointer
+StopWDT     mov.w   #WDTPW|WDTHOLD,&WDTCTL  ; Stop watchdog timer
+			mov.b	#0d, P2SEL
+
+
+;-------------------------------------------------------------------------------
+; Main loop here
+;-------------------------------------------------------------------------------
+Init
+	bis.b #020h, &P2IE
+	and.b #0DFh, &P2SEL ;11001111 p2.5 bit is interrupt flag.
+	and.b #0DFh, &P2SEL2
+	bis.b #020h, &P2IES  ;0010 0000
+	clr &P2IFG
+	eint
+
+TIMER_INT		;mov.w	#210h,	TA0CTL
+			;mov.w	#00f0h,	TA0CCTL0
+			;mov.w	#28f5h,	&TA0CCR0
+			;clr		&TAIFG
+			eint
+
+			mov.w	#centiseconds,	R7
+			mov.w	#seconds, R6
+
+
+Setup		mov.b	#00ffh ,&P1DIR
+			mov.b	#000fh ,&P2DIR
+			mov 	#00h, R9 ;division number
+
+;1000 milliseconds=100cs=1s
+
+MainLoop	mov.w	#array,	R5
+			mov.b	0(R7),	R15
+			call	#BCD
+			call	#DecCenC
+			call	#Seg2
+			call	#Delay
+
+			mov.w	#array,	R5
+			mov.b	0(R6),	R15
+			call	#BCD
+			call	#Seg1
+			call	#Delay
+
+
+Seg1		mov.b	#00011000b, &P2OUT
+			sub.b 	R15, R13
+			call #div
+			add.b R9, R5
+			mov.b	@R5,	&P1OUT
+			ret
+
+Seg2		mov.b	#00100100b, &P2OUT
+			add.w	R15,	R5
+			mov.b	@R5,	&P1OUT
+			ret
+
+
+DecCenC		mov.b	#020h,	&P2OUT  ; interrupt and dec centisecond.
+			ret
+
+Delay		mov.w #0FFh ,R9
+L2			mov.w #0FFh ,R10
+L1			dec.w R10
+			jnz L1
+			dec.w R9
+			jnz L2
+			ret
+
+BCD			dec.b	R15
+			mov.b	R15,	R13
+MOD			cmp 	 	#000ah, R15
+			jl			cik
+			sub 		#000ah, R15
+			jmp 		MOD
+
+			ret
+
+div			cmp #00h, R13
+			jeq cik
+			sub #10d , R13
+			inc r9
+			jmp div
+			ret
+
+
+OND
+
+TISR		dint
+			dec.b		@centiseconds
+			mov.b		@centiseconds,	R7
+			cmp.b		#000h, @centiseconds
+			jne			decsec
+			dec.b		R6
+			clr			0(R7)
+			reti
+
+decsec		clr		&TAIFG
+			clr &P2IFG; Clear the flag
+			dec.b seconds
+			eint
+			reti
+
+Mod			cmp 	 	#000ah, R15
+			jl			cik
+			sub 		#000ah, R15
+			jmp 		Mod
+
+cik			ret
+
+finito		ret
+
+
+
+				.data
+seconds			.byte 03Bh ; 59 seconds
+centiseconds	.byte 64h  ; 100 centicesonds
+
+array			.byte 00111111b, 00000110b, 01011011b, 01001111b, 01100110b, 01101101b, 01111101b, 00000111b, 01111111b, 01101111b
+
+;-------------------------------------------------------------------------------
+; Stack Pointer definition
+;-------------------------------------------------------------------------------
+            .global __STACK_END
+            .sect   .stack
+            
+;-------------------------------------------------------------------------------
+; Interrupt Vectors
+;-------------------------------------------------------------------------------
+            .sect   ".reset"                ; MSP430 RESET Vector
+            .short  RESET
+            
