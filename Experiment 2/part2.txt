@@ -1,0 +1,68 @@
+;-------------------------------------------------------------------------------
+; MSP430 Assembler Code Template for use with TI Code Composer Studio
+;
+;
+;-------------------------------------------------------------------------------
+            .cdecls C,LIST,"msp430.h"       ; Include device header file
+            
+;-------------------------------------------------------------------------------
+            .def    RESET                   ; Export program entry-point to
+                                            ; make it known to linker.
+;-------------------------------------------------------------------------------
+            .text                           ; Assemble into program memory.
+            .retain                         ; Override ELF conditional linking
+                                            ; and retain current section.
+            .retainrefs                     ; And retain any sections that have
+                                            ; references to current section.
+
+;-------------------------------------------------------------------------------
+RESET       mov.w   #__STACK_END,SP         ; Initialize stackpointer
+StopWDT     mov.w   #WDTPW|WDTHOLD,&WDTCTL  ; Stop watchdog timer
+			mov.b	#0d, P2SEL
+
+
+;-------------------------------------------------------------------------------
+; Main loop here
+;-------------------------------------------------------------------------------
+SETUP		bis.b #00ffh, &P1DIR
+			bis.b #01h, &P2DIR
+			mov #arr2, R6
+			mov.b #0d, R10  ;index counter
+
+MAIN		mov.b @R6+, &P1OUT
+			inc.b R10
+			call #Delay
+			cmp #09h, R10
+			jeq CLEAR
+			jmp MAIN
+
+CLEAR		sub R6, R10
+			clr R10
+			ret
+
+
+Delay	  mov.w #0Ah ,R14 ;Delay to R14
+L2 		  mov.w #07A00h , R15
+L1 		  dec.w R15 ; Decrement R15
+		  jnz L1
+		  dec.w R14
+		  jnz L2
+		  ret
+
+;A-C-H-I-L-L-E-U-S
+
+arr2 .byte  01110111b, 00111001b, 01110110b, 00000110b, 00111000b, 00111000b, 01111001b, 00111110b, 01101101b
+
+
+;------------------------------------------------------------------------------
+; Stack Pointer definition
+;-------------------------------------------------------------------------------
+            .global __STACK_END
+            .sect   .stack
+            
+;-------------------------------------------------------------------------------
+; Interrupt Vectors
+;-------------------------------------------------------------------------------
+            .sect   ".reset"                ; MSP430 RESET Vector
+            .short  RESET
+            
